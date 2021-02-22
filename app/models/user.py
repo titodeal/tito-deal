@@ -72,55 +72,166 @@ class UserModel(MainModel):
         return self.prepare_response(0, output[0], "answer")
 
     @MainModel.transaction_wrapper
-    def get_colleagues(self, login):
-        pass
+    def get_user_offers(self, user_id):
+        with self.conn.cursor() as curs:
+            curs.execute("SELECT "
+                         "       id_offer, users.user_id, users.login, "
+                         "       conditions, 'contractor' as type, offers.accepted "
+                         "FROM offers "
+                         "JOIN users ON users.user_id = offers.contractor_id  "
+                         f"WHERE offers.user_id = {user_id} "
+                         "UNION "
+                         "SELECT "
+                         "       id_offer, users.user_id, users.login, "
+                         "       conditions, 'employer' as type, offers.accepted "
+                         "FROM offers "
+                         "JOIN users USING (user_id) "
+                         f"WHERE offers.contractor_id = {user_id}")
+
+            output = curs.fetchall()
+
+        if not output:
+            answer = f"Offer records not found"
+            return self.prepare_response(1, answer, "answer")
+
+        columns = ["offer_id", "user_id", "login", "conditions", "type", "accepted"]
+        return self.prepare_response(0, output, "tb_data", columns)
 
     @MainModel.transaction_wrapper
-    def send_invintation(self, fromuser, touser):
-        pass
+    def get_user_contractors(self, user_id):
+        with self.conn.cursor() as curs:
+            curs.execute("SELECT users.* "
+                         "FROM offers "
+                         "JOIN users ON users.user_id = offers.contractor_id "
+                         f"WHERE offers.user_id = {user_id}")
+
+            output = curs.fetchall()
+            columns = self.get_table_columns("users", curs)
 
 
-#     @staticmethod
-#     def add_contractor(user_id, contractor_id):
-#         cur = conn.cursor()
-#         cur.execute(f"INSERT INTO contractors "
-#                     f"(user_id, user_contractor_id) "
-#                     f"VALUES "
-#                     f"({user_id}, {contractor_id}) "
-#                     "RETURNING *")
-# 
-#         print(cur.fetchall())
-#         conn.commit()
-#         cur.close()
-# 
-#     @staticmethod
-#     def set_contractor_confirm(user_id, contractor_id, confirm=False):
-#         cur = conn.cursor()
-#         cur.execute("UPDATE  contractors "
-#                     f"SET confirmed = {str(confirm)} "
-#                     f"WHERE user_id = '{user_id}'  AND user_contractor_id = '{contractor_id}' "
-#                     "RETURNING *")
-# 
-#         print(cur.fetchall())
-#         conn.commit()
-#         cur.close()
-# 
-#     @staticmethod
-#     def get_user(name):
-#         cur = conn.cursor()
-#         cur.execute(f"SELECT * "
-#                     "FROM users "
-#                     "WHERE name LIKE '{}'".format(name))
-#         return cur.fetchall()
-#         cur.close()
-# 
-# 
-#     @staticmethod
-#     def get_email(email):
-#         cur = conn.cursor()
-#         cur.execute(f"SELECT * "
-#                     "FROM users "
-#                     "WHERE email LIKE '{}'".format(email))
-#         return cur.fetchall()
-#         cur.close()
+        if not output:
+            answer =  f"Contractors not found"
+            return self.prepare_response(1, answer, "answer")
+        return self.prepare_response(0, output, "tb_data", columns)
 
+    @MainModel.transaction_wrapper
+    def get_user_agreements(self, user_id):
+        with self.conn.cursor() as curs:
+            curs.execute("SELECT "
+                         "  agreement_id, "
+                         "  owner_id, "
+                         "  owners.login as owner_login, "
+                         "  contractor_id, "
+                         "  contractors.login as contracotor_login, "
+                         "  conditions, "
+                         "  expiration, "
+                         "  accepted "
+                         "FROM agreements "
+                         "JOIN users as owners ON owners.user_id = owner_id "
+                         "JOIN users as contractors ON contractors.user_id = contractor_id "
+                         f"WHERE owner_id = {user_id} OR contractor_id = {user_id}")
+
+            output = curs.fetchall()
+
+        if not output:
+            answer = f"Agreements records for user id '{user_id}' not found"
+            return self.prepare_response(1, answer, "answer")
+
+        columns = ["agreement_id", "owner_id", "owner_login",
+                   "contractor_id", "contractor_login",
+                   "conditions", "expiration", "accepted"]
+        return self.prepare_response(0, output, "tb_data", columns)
+
+    @MainModel.transaction_wrapper
+    def send_offer(self, owner_id, contractor_id):
+        with self.conn.cursor() as curs:
+            try:
+                curs.execute("INSERT INTO agreements " "(owner_id, contractor_id) "
+                             "VALUES "
+                             f"('{owner_id}', '{contractor_id}') "
+                             "RETURNING *")
+
+                output = curs.fetchall()
+                self.conn.commit()
+
+            except psycopg2.errors.UniqueViolation as e:
+                return self.prepare_response(1, str(e), "err")
+        return self.prepare_response(0, output, "answer")
+
+    @MainModel.transaction_wrapper
+    def accept_agreement(self, agreement_id):
+        with self.conn.cursor() as curs:
+            try:
+                curs.execute("UPDATE agreements "
+                             "SET accepted = true "
+                             "WHERE "
+                             f"  agreement_id = {agreement_id} "
+                             "RETURNING *")
+
+                output = curs.fetchall()
+                self.conn.commit()
+
+            except psycopg2.errors.UniqueViolation as e:
+                return self.prepare_response(1, str(e), "err")
+        return self.prepare_response(0, output, "answer")
+
+    @MainModel.transaction_wrapper
+    def send_contract(self, project_id, agreement_id):
+        with self.conn.cursor() as curs:
+            try:
+                curs.execute("INSERT INTO contracts "
+                             "(project_id, agreement_id) "
+                             "VALUES "
+                             f"('{project_id}', '{agreement_id}') "
+                             "RETURNING *")
+
+                output = curs.fetchall()
+                self.conn.commit()
+
+            except psycopg2.errors.UniqueViolation as e:
+                return self.prepare_response(1, str(e), "err")
+
+        columns = ["contract_id", "agreement_id", "project_id",
+                   "documents", "departments", "specialty", "role", "accepted", "date"]
+        return self.prepare_response(0, output, "tb_data", columns)
+
+    @MainModel.transaction_wrapper
+    def get_user_contracts(self, user_id):
+        with self.conn.cursor() as curs:
+            curs.execute("SELECT contracts.contract_id, "
+                         "       contracts.agreement_id, "
+                         "       users.user_id as contractor_id, "
+                         "       users.login as contractor, "
+                         "       projects.project_id, "
+                         "       projects.name as project, "
+                         "       contracts.accepted, "
+                         "       contracts.documents, "
+                         "       contracts.departments, "
+                         "       contracts.specialty, "
+                         "       contracts.role, "
+                         "       contracts.date "
+                         "FROM agreements "
+                         "JOIN contracts USING (agreement_id) "
+                         "JOIN users on users.user_id = agreements.contractor_id "
+                         "JOIN projects on projects.project_id = contracts.project_id "
+                         f"WHERE agreements.owner_id = {user_id}")
+
+            output = curs.fetchall()
+
+        if not output:
+            answer = f"Contracts records for user id '{user_id}' not found"
+            return self.prepare_response(1, answer, "answer")
+
+        columns = ["contract_id",
+                   "agreement_id",
+                   "contractor_id",
+                   "contractor",
+                   "project_id",
+                   "project",
+                   "accepted",
+                   "documents",
+                   "departments",
+                   "specialty",
+                   "role",
+                   "date"]
+        return self.prepare_response(0, output, "tb_data", columns)

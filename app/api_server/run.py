@@ -8,11 +8,14 @@ sys.path.append(external_path)
 
 from tito_sockets import application_server
 
+from app.models import user, projects
 
-from app.models import user
 
-class ApiServer(application_server.ApplicationServer, user.UserModel):
-#     """docstring for ApiServer"""
+class ApiServer(application_server.ApplicationServer,
+                user.UserModel,
+                projects.ProjectsModel):
+
+    """docstring for ApiServer"""
     def __init__(self, port, timeout=0.2):
         super(ApiServer, self).__init__(port=port, timeout=timeout)
         user.UserModel.__init__(self)
