@@ -3,6 +3,7 @@ DROP TABLE IF EXISTS contracts;
 DROP TABLE IF EXISTS templates CASCADE;
 DROP TABLE IF EXISTS projects CASCADE;
 DROP TABLE IF EXISTS roots;
+DROP TABLE IF EXISTS project_roots;
 DROP TABLE IF EXISTS agreements;
 DROP TABLE IF EXISTS users;
 
@@ -42,10 +43,18 @@ CREATE TABLE projects
 CREATE TABLE roots
 (
    root_id serial UNIQUE NOT NULL,
-   path varchar(256) NOT NULL,
+   owner_id int REFERENCES users(user_id),
+   root_folder varchar(256) NOT NULL,
+   sharing bool NOT NULL DEFAULT 'False',
+   CONSTRAINT pk_roots PRIMARY KEY (owner_id, root_folder)
+);
+
+CREATE TABLE project_roots
+(
+   project_root_id serial UNIQUE NOT NULL,
+   root_id int REFERENCES roots(root_id),
    project_id int REFERENCES projects(project_id),
-   user_id int REFERENCES users(user_id),
-   CONSTRAINT pk_roots PRIMARY KEY (project_id, user_id)
+   CONSTRAINT pk_project_roots PRIMARY KEY (root_id, project_id)
 );
 
 CREATE TABLE document_templates

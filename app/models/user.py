@@ -235,3 +235,42 @@ class UserModel(MainModel):
                    "role",
                    "date"]
         return self.prepare_response(0, output, "tb_data", columns)
+
+    @MainModel.transaction_wrapper
+    def create_user_root(self, user_id, root_folder, sharing=False):
+#         sharing = str(sharing).lower()
+        with self.conn.cursor() as curs:
+            try:
+                curs.execute("INSERT INTO roots "
+                             "(owner_id, root_folder, sharing) "
+                             "VALUES "
+                             f"('{user_id}', '{root_folder}', '{sharing}') "
+                             "RETURNING *")
+
+                output = curs.fetchall()
+                self.conn.commit()
+
+            except psycopg2.errors.UniqueViolation as e:
+                return self.prepare_response(1, str(e), "err")
+
+        return self.prepare_response(0, output, "answer")
+
+    @MainModel.transaction_wrapper
+    def get_user_roots(self, user_id):
+        with self.conn.cursor() as curs:
+            curs.execute("SELECT root_id, "
+                         "       root_folder, "
+                         "       sharing "
+                         "FROM roots "
+                         f"WHERE owner_id = {user_id}")
+
+            output = curs.fetchall()
+
+        if not output:
+            answer = f"Roots records for user id '{user_id}' not found"
+            return self.prepare_response(1, answer, "answer")
+
+        columns = ["root_id",
+                   "root_folder",
+                   "sharing"]
+        return self.prepare_response(0, output, "tb_data", columns)

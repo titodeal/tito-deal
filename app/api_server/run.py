@@ -101,6 +101,6 @@ class ApiServer(application_server.ApplicationServer,
 
     def verify_connection(self, client):
         if not (id(client), client.getpeername()) in self.verified_connections:
-            answer = "!=> User no have credentials"
+            answer = "!=> User no has credentials"
             return self.prepare_response(1, answer, "err")
 
